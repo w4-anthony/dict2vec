@@ -26,6 +26,12 @@
 #include <math.h>
 #include <pthread.h>
 
+#include <sstream>
+#include <iostream>
+#include <fstream>
+#include <map>
+#include <string>
+
 #define MAXLEN       100
 #define MAXLINE      1000
 
@@ -33,6 +39,8 @@
 #define MAX_SIGMOID  4
 
 #define HASHSIZE     30000000
+
+using namespace std;
 
 struct entry
 {
@@ -81,7 +89,7 @@ struct parameters
 
 /* dynamic array containing 1 entry for each word in vocabulary */
 struct entry *vocab;
-
+// map<string, struct entry> vocab;
 struct parameters args = {
 	"", "",
 	100, 5, 5, 5, 0, 0, 1, 1, 0,
@@ -214,7 +222,7 @@ void init_negative_table()
 	float sum, d;
 
 	/* allocate memory for the negative table*/
-	table = calloc(table_size, sizeof *table);
+	table = (int*) calloc(table_size, sizeof *table);
 
 	if (table == NULL)
 	{
@@ -267,25 +275,30 @@ void compute_discard_prob()
 }
 
 /* hash: form hash value for string s */
-unsigned int hash(char *s)
+map<string, int> _hash;
+unsigned int hash_f(const char *s)
 {
-	unsigned int hashval;
+	if (_hash.find(s) == _hash.end()) {
+		_hash[s] = _hash.size();
+	}
 
-	for (hashval = 0; *s != '\0'; ++s)
-		hashval = hashval * 257 + *s;
-	return hashval % HASHSIZE;
+	return _hash[s];
+	// unsigned int hashval;
+
+	// for (hashval = 0; *s != '\0'; ++s)
+	// 	hashval = hashval * 257 + *s;
+	// return hashval % HASHSIZE;
 }
 
 /* find: return the position of string s in vocab_hash. If word has never been
  * met, the cell at index hash(word) in vocab_hash will be -1. If the cell is
  * not -1, we start to compare word to each element with the same hash.
  */
-unsigned int find(char *s)
+unsigned int find(const char *s)
 {
-	unsigned int h = hash(s);
-
-	while (vocab_hash[h] != -1 && strcmp(s, vocab[vocab_hash[h]].word))
-		h = (h + 1) % HASHSIZE;
+	unsigned int h = hash_f(s);
+	// while (vocab_hash[h] != -1 && strcmp(s, vocab[vocab_hash[h]].word))
+	// 	h = (h + 1) % HASHSIZE;
 	return h;
 }
 
@@ -297,7 +310,7 @@ void add_word(char *word)
 	{
 		/* create new entry */
 		struct entry e;
-		e.word = malloc(sizeof(char) * (strlen(word)+1));
+		e.word = (char*) malloc(sizeof(char) * (strlen(word)+1));
 		strcpy(e.word, word);
 		e.count    = 1;
 		e.pdiscard = 1.0;
@@ -316,7 +329,7 @@ void add_word(char *word)
 		if (vocab_size >= vocab_max_size)
 		{
 			vocab_max_size += 10000;
-			vocab = realloc(vocab, vocab_max_size * sizeof(struct entry));
+			vocab = (struct entry *) realloc(vocab, vocab_max_size * sizeof(struct entry));
 		}
 	}
 	else
@@ -383,7 +396,7 @@ void sort_and_reduce_vocab()
 
 	/* resize the vocab array with its new size */
 	vocab_size = valid_words;
-	vocab = realloc(vocab, vocab_size * sizeof(struct entry));
+	vocab = (struct entry *) realloc(vocab, vocab_size * sizeof(struct entry));
 
 	/* sorting has changed the index of each word, so update the value
 	 in vocab_hash. Start by reseting all values to -1.*/
@@ -426,9 +439,9 @@ int read_strong_pairs(char *filename)
 		 * create the array. Else, expand by one cell. */
 		len = vocab[i1].n_sp;
 		if (len == 0)
-			vocab[i1].sp = calloc(1, sizeof(int));
+			vocab[i1].sp = (int*) calloc(1, sizeof(int));
 		else
-			vocab[i1].sp = realloc(vocab[i1].sp, (len+1) * sizeof(int));
+			vocab[i1].sp = (int*) realloc(vocab[i1].sp, (len+1) * sizeof(int));
 
 		/* add i2 to the list of strong pairs indexes of word1 */
 		vocab[i1].sp[len] = i2;
@@ -440,9 +453,9 @@ int read_strong_pairs(char *filename)
 		 the array. Else, expand by one cell. */
 		len = vocab[i2].n_sp;
 		if (len == 0)
-			vocab[i2].sp = calloc(1, sizeof(int));
+			vocab[i2].sp = (int*) calloc(1, sizeof(int));
 		else
-			vocab[i2].sp = realloc(vocab[i2].sp, (len+1) * sizeof(int));
+			vocab[i2].sp = (int*) realloc(vocab[i2].sp, (len+1) * sizeof(int));
 
 		/* add i2 to the list of strong pairs indexes of word1 */
 		vocab[i2].sp[len] = i1;
@@ -458,58 +471,58 @@ int read_strong_pairs(char *filename)
  */
 int read_weak_pairs(char *filename)
 {
-	FILE *fi;
-	char word1[MAXLEN], word2[MAXLEN];
 	int i1, i2, len;
 
-	if ((fi = fopen(filename, "r")) == NULL)
+	ifstream myfile(filename);
+	if (myfile.is_open())
 	{
-		printf("WARNING: weak pairs data not found!\n"
-		       "Not taken into account during learning.\n");
-		return 1;
+		string line;
+		string word1, word2;
+		while ( getline(myfile, line) )
+		{
+			stringstream ss(line);
+			ss >> word1 >> word1;
+
+			i1 = find(word1.c_str());
+			i2 = find(word2.c_str());
+
+			/* nothing to do if one of the word is not in vocab */
+			if (vocab_hash[i1] == -1 || vocab_hash[i2] == -1)
+				continue;
+
+			/* get the real indexes (not the index in the hash table) */
+			i1 = vocab_hash[i1];
+			i2 = vocab_hash[i2];
+
+			/* look if we already have added one pair for i1. If not, create
+			the array. Else, expand by one cell. */
+			len = vocab[i1].n_wp;
+			if (len == 0)
+				vocab[i1].wp = (int*) calloc(1, sizeof(int));
+			else
+				vocab[i1].wp = (int*) realloc(vocab[i1].wp, (len+1) * sizeof(int));
+
+			/* add i2 to the list of weak pairs indexes of word1 */
+			vocab[i1].wp[len] = i2;
+			vocab[i1].n_wp++;
+
+			/*   ---------   */
+
+			/* look if we already have added one pair for i2. If not, create
+			 the array. Else, expand by one cell. */
+			len = vocab[i2].n_wp;
+			if (len == 0)
+				vocab[i2].wp = (int*) calloc(1, sizeof(int));
+			else
+				vocab[i2].wp = (int*) realloc(vocab[i2].wp, (len+1) * sizeof(int));
+
+			/* add i1 to the list of weak pairs indexes of word2 */
+			vocab[i2].wp[len] = i1;
+			vocab[i2].n_wp++;
+		}
+		myfile.close();
 	}
 
-	while ((fscanf(fi, "%s %s", word1, word2) != EOF))
-	{
-		i1 = find(word1);
-		i2 = find(word2);
-
-		/* nothing to do if one of the word is not in vocab */
-		if (vocab_hash[i1] == -1 || vocab_hash[i2] == -1)
-			continue;
-
-		/* get the real indexes (not the index in the hash table) */
-		i1 = vocab_hash[i1];
-		i2 = vocab_hash[i2];
-
-		/* look if we already have added one pair for i1. If not, create
-		the array. Else, expand by one cell. */
-		len = vocab[i1].n_wp;
-		if (len == 0)
-			vocab[i1].wp = calloc(1, sizeof(int));
-		else
-			vocab[i1].wp = realloc(vocab[i1].wp, (len+1) * sizeof(int));
-
-		/* add i2 to the list of weak pairs indexes of word1 */
-		vocab[i1].wp[len] = i2;
-		vocab[i1].n_wp++;
-
-		/*   ---------   */
-
-		/* look if we already have added one pair for i2. If not, create
-		 the array. Else, expand by one cell. */
-		len = vocab[i2].n_wp;
-		if (len == 0)
-			vocab[i2].wp = calloc(1, sizeof(int));
-		else
-			vocab[i2].wp = realloc(vocab[i2].wp, (len+1) * sizeof(int));
-
-		/* add i1 to the list of weak pairs indexes of word2 */
-		vocab[i2].wp[len] = i1;
-		vocab[i2].n_wp++;
-	}
-
-	fclose(fi);
 	return 0;
 }
 
@@ -546,6 +559,7 @@ void read_vocab(char *input_fn, char *strong_fn, char *weak_fn)
 		}
 
 		/* add word we just read or increment its count if needed */
+
 		add_word(word);
 
 		/* Wikipedia has around 8M unique words, so we never hit the
@@ -556,7 +570,7 @@ void read_vocab(char *input_fn, char *strong_fn, char *weak_fn)
 			sort_and_reduce_vocab();*/
 	}
 
-	sort_and_reduce_vocab(HASHSIZE);
+	sort_and_reduce_vocab();
 
 	printf("Vocab size: %ld\n", vocab_size);
 	printf("Words in train file: %ld\n", train_words);
@@ -585,14 +599,14 @@ void init_network()
 	float r, l;
 	int i, j;
 
-	if ((WI = malloc(sizeof *WI * vocab_size * args.dim)) == NULL)
+	if ((WI = (float*) malloc(sizeof *WI * vocab_size * args.dim)) == NULL)
 	{
 		printf("Memory allocation failed for WI\n");
 		exit(1);
 	}
 
 
-	if ((WO = calloc(vocab_size * args.dim, sizeof *WO)) == NULL)
+	if ((WO = (float*) calloc(vocab_size * args.dim, sizeof *WO)) == NULL)
 	{
 		printf("Memory allocation failed for WO\n");
 		exit(1);
@@ -640,7 +654,7 @@ void *train_thread(void *id)
 	/* init variables */
 	fseek(fi, file_size / args.num_threads * rnd, SEEK_SET);
 	word_count_local = negsamp_discarded = negsamp_total = 0;
-	hidden           = calloc(args.dim, sizeof *hidden);
+	hidden           = (float*) calloc(args.dim, sizeof *hidden);
 	half_ws          = args.window / 2;
 	wts = discarded  = 0.0f;
 	cps              = 1000.0f / CLOCKS_PER_SEC;
@@ -1055,7 +1069,7 @@ int main(int argc, char **argv)
 	/*********** train ***/
 	/* variable for future use */
 
-	if ((threads = calloc(args.num_threads, sizeof *threads)) == NULL)
+	if ((threads = (pthread_t *) calloc(args.num_threads, sizeof *threads)) == NULL)
 	{
 		printf("Cannot allocate memory for threads\n");
 		exit(1);

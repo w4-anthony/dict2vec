@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Dict2vec.  If not, see <http://www.gnu.org/licenses/>.
 
-CC = gcc
+CC = g++
 
 # The -Ofast might not work with older versions of gcc; in that case, use -O2
 #
@@ -26,12 +26,12 @@ CC = gcc
 # -Ofast : code optimization
 # -funroll-loops : unroll loops that can be determined at compile time
 # -Wall -Wextra -Wno-unused-result : turn on warning messages
-CFLAGS = -std=c11 -lm -pthread -Ofast -funroll-loops -Wall -Wextra -Wno-unused-result
+CFLAGS = -g -lm -pthread -Ofast -funroll-loops -Wall -Wextra -Wno-unused-result
 
 all: dict2vec
 
-dict2vec : dict2vec.c
-	$(CC) dict2vec.c -o ./dict2vec $(CFLAGS)
+dict2vec : dict2vec.cc
+	$(CC) dict2vec.cc -o ./dict2vec $(CFLAGS)
 
 clean:
 	rm -rf dict2vec
