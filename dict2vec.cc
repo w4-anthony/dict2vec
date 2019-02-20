@@ -481,7 +481,7 @@ int read_weak_pairs(char *filename)
 		while ( getline(myfile, line) )
 		{
 			stringstream ss(line);
-			ss >> word1 >> word1;
+			ss >> word1 >> word2;
 
 			i1 = find(word1.c_str());
 			i2 = find(word2.c_str());
